@@ -7,9 +7,10 @@ module.exports = {
       unitPrecision: 5, //指定px转换为视窗单位值的小数位数(很多时候无法整除)
       viewportUnit: "vw", //指定需要转换成的视窗单位，建议使用vw
 
-      selectorBlackList: ["ignore", "tab-bar", "tab-bar-item"], //指定不需要转换的类
+      selectorBlackList: ["ignore", "tab-bar"], //指定不需要转换的类
       minPixelValue: 1, //小于或等于1px不转换为视窗单位
-      mediaQuery: false //是否允许在媒体查询中转换px
+      mediaQuery: false, //是否允许在媒体查询中转换px
+      exclude: [/TabBar/] //正则,匹配文件
     }
   }
 };
