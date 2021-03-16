@@ -1,15 +1,23 @@
 <template>
   <div id="detail">
-    <detail-nav-bar />
-    <scroll class="content1" ref="scroll" :probe-type="3">
+    <detail-nav-bar ref="nav" @titleClick="titleClick" />
+    <scroll
+      class="content1"
+      ref="scroll"
+      :probe-type="3"
+      @scroll="contentScroll"
+    >
       <detail-swiper :topImages="topImages" />
       <detail-base-info :goods="goods" />
       <detail-shop-info :shop="shop" />
       <detail-goods-info :detail-info="detailInfo" @imageLoad="imageLoad" />
-      <detail-param-info :param-info="paramInfo" />
-      <detail-comment-info :comment-info="commentInfo" />
-      <goods-list :goods="recommends" />
+      <detail-param-info ref="params" :param-info="paramInfo" />
+      <detail-comment-info ref="comment" :comment-info="commentInfo" />
+      <goods-list ref="recommend" :goods="recommends" />
     </scroll>
+    <detail-bottom-bar @addToCart="addToCart" />
+    <back-top @click.native="backTop" v-show="isShowBackTop" />
+    <toast :message="message" :is-show="show" />
   </div>
 </template>
 
@@ -21,12 +29,18 @@ import DetailShopInfo from "./childComps/DetailShopInfo";
 import DetailGoodsInfo from "./childComps/DetailGoodsInfo";
 import DetailParamInfo from "./childComps/DetailParamInfo";
 import DetailCommentInfo from "./childComps/DetailCommentInfo";
+import DetailBottomBar from "./childComps/DetailBottomBar";
 import GoodsList from "components/content/goods/GoodsList";
 
 import Scroll from "components/common/scroll/Scroll";
-import { itemListenerMixin } from "common/mixin";
+import { itemListenerMixin, backTopMixin } from "common/mixin";
+import { debounce } from "common/utils";
 
 import { getDetail, Goods, Shop, GoodsParam } from "network/detail";
+
+import { mapActions } from "vuex";
+
+import Toast from "components/common/toast/Toast";
 
 export default {
   name: "Detail",
@@ -39,7 +53,9 @@ export default {
     DetailParamInfo,
     DetailCommentInfo,
     GoodsList,
-    Scroll
+    Scroll,
+    DetailBottomBar,
+    Toast
   },
   data() {
     return {
@@ -51,16 +67,90 @@ export default {
       detailInfo: {},
       paramInfo: {},
       commentInfo: {},
-      recommends: []
+      recommends: [],
+      themeTopYs: [],
+      getThemeTopY: null,
+      currentIndex: 0,
+      isShowBackTop: false,
+      message: "",
+      show: false
     };
   },
-  mixins: [itemListenerMixin],
+  mixins: [itemListenerMixin, backTopMixin],
   methods: {
+    ...mapActions(["addCart"]),
     imageLoad() {
       this.$refs.scroll.refresh();
+      this.getThemeTopY();
+    },
+    titleClick(index) {
+      this.$refs.scroll.scrollTo(0, -this.themeTopYs[index], 100);
+    },
+    contentScroll(position) {
+      //1.获取y值
+      const positionY = -position.y;
+      //2.positionY和主题中值进行对比
+      //[0, 3182, 3689, 3884
+      //positionY 在0 和 3182 之间, index = 0
+      //positionY 在3182 和 3689 之间, index = 1
+      //positionY 在3689 和 3884 之间, index = 2
+      //positionY 超过3884, index = 3
+      let length = this.themeTopYs.length;
+      // for (let i = 0; i < length; i++) {
+      //   if (
+      //     this.currentIndex !== i &&
+      //     ((i < length - 1 &&
+      //       positionY >= this.themeTopYs[i] &&
+      //       positionY < this.themeTopYs[i + 1]) ||
+      //       (i === length - 1 && positionY >= this.themeTopYs[i]))
+      //   ) {
+      //     this.currentIndex = i;
+      //     this.$refs.nav.currentIndex = this.currentIndex;
+      //   }
+      // }
+      for (let i = 0; i < length - 1; i++) {
+        if (
+          this.currentIndex !== i &&
+          positionY >= this.themeTopYs[i] &&
+          positionY < this.themeTopYs[i + 1]
+        ) {
+          this.currentIndex = i;
+          this.$refs.nav.currentIndex = this.currentIndex;
+        }
+      }
+
+      this.isShowBackTop = -position.y > 1000;
+    },
+    addToCart() {
+      //1.获取购物车需要展示的数据
+      const product = {};
+      product.image = this.topImages[0];
+      product.title = this.goods.title;
+      product.desc = this.goods.desc;
+      product.price = this.goods.price;
+      product.id = this.id;
+      //2.将商品添加到购物车里
+      this.addCart(product).then(res => {
+        // this.show = true;
+        // this.message = res;
+        // setTimeout(() => {
+        //   this.show = false;
+        //   this.message = "";
+        // }, 1500);
+        this.$toast.show(res, 2000);
+      });
     }
   },
   created() {
+    this.getThemeTopY = debounce(() => {
+      this.themeTopYs = [];
+      this.themeTopYs.push(0);
+      this.themeTopYs.push(this.$refs.params.$el.offsetTop);
+      this.themeTopYs.push(this.$refs.comment.$el.offsetTop);
+      this.themeTopYs.push(this.$refs.recommend.$el.offsetTop);
+      this.themeTopYs.push(Number.MAX_VALUE);
+    });
+
     //1.保存传入的id
     this.id = this.$route.params.id;
 
@@ -75,9 +165,10 @@ export default {
         itemInfo: {
           desc: "新款上市",
           discountDesc: "活动价",
+          count: 0,
           price: "￥38.50",
           oldPrice: "￥69.00",
-          realPrice: "38.50",
+          newPrice: "38.50",
           title:
             "2021春秋季新款原宿风长袖T恤女潮学生韩版拼接白色复古港味宽松百搭上衣打底"
         },
@@ -223,6 +314,34 @@ export default {
               "https://img14.360buyimg.com/n2/s308x308_jfs/t1/156412/16/8274/126712/60163f02Ea0bf16ed/fd9a38c9a0864ceb.jpg!q70.dpg",
             title: "十点抢券",
             price: 100
+          },
+          {
+            id: 1,
+            img:
+              "https://img14.360buyimg.com/n2/s308x308_jfs/t1/156412/16/8274/126712/60163f02Ea0bf16ed/fd9a38c9a0864ceb.jpg!q70.dpg",
+            title: "十点抢券",
+            price: 100
+          },
+          {
+            id: 1,
+            img:
+              "https://img12.360buyimg.com/n2/s308x308_jfs/t1/151685/14/10874/501165/5fe03b00Eaf1b2e2c/8afa0fda957c0fea.jpg!q70.dpg",
+            title: "十点抢券",
+            price: 100
+          },
+          {
+            id: 1,
+            img:
+              "https://img12.360buyimg.com/n2/s308x308_jfs/t1/148700/37/7522/79662/5f50f211E8aeab425/56a8706b72a9d297.jpg!q70.dpg",
+            title: "十点抢券",
+            price: 100
+          },
+          {
+            id: 1,
+            img:
+              "https://img14.360buyimg.com/n2/s308x308_jfs/t1/156412/16/8274/126712/60163f02Ea0bf16ed/fd9a38c9a0864ceb.jpg!q70.dpg",
+            title: "十点抢券",
+            price: 100
           }
         ]
       };
@@ -246,6 +365,18 @@ export default {
 
       //7.推荐数据
       this.recommends = res.recommendsList;
+
+      // this.themeTopYs = [];
+      // this.$nextTick(() => {
+      //   //根据最新数据，对应的DOM是已经被渲染出来
+      //   //但是图片是依然没有加载完（目前获取到offsetTop不包含其中的图片）
+      //   //offsetTop值不对的时候，一般都是因为图片问题
+      //   this.themeTopYs.push(0);
+      //   this.themeTopYs.push(this.$refs.params.$el.offsetTop);
+      //   this.themeTopYs.push(this.$refs.comment.$el.offsetTop);
+      //   this.themeTopYs.push(this.$refs.recommend.$el.offsetTop);
+      //   console.log(this.themeTopYs);
+      // });
     });
   },
   mounted() {},

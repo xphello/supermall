@@ -1,5 +1,6 @@
 import { POP, NEW, SELL } from "./const";
 import { debounce } from "./utils";
+import BackTop from "components/content/backTop/BackTop";
 
 export const itemListenerMixin = {
   components: {},
@@ -18,9 +19,12 @@ export const itemListenerMixin = {
 };
 
 export const backTopMixin = {
+  components: {
+    BackTop
+  },
   data: function() {
     return {
-      showBackTop: false
+      isShowBackTop: false
     };
   },
   methods: {
